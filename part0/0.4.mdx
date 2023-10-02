@@ -4,7 +4,6 @@ sequenceDiagram
 
 browser->>server: POST https://studies.cs.helsinki.fi/exampleapp/new_note
     activate server
-    
     Note left of server: Server adds a new note to the notes array from<br/> the body of the request.  
 
 browser->>server: GET https://studies.cs.helsinki.fi/exampleapp/notes
