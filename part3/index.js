@@ -1,92 +1,114 @@
+require('dotenv').config();
 const express = require('express');
 const app = express();
 const morgan = require('morgan');
 const cors = require('cors');
+const Person = require('./models/Person')
 app.use(express.json());
 app.use(cors());
 
-function generateRandomId() {
-  // Generate a random number between 1 and 1000000 (you can adjust the range as needed)
-  return Math.floor(Math.random() * 1000000) + 1;
-}
-let people = [
-  {
-    "id": 1,
-    "name": "Arto Hellas",
-    "number": "040-123456"
-  },
-  {
-    "id": 2,
-    "name": "Ada Lovelace",
-    "number": "39-44-5323523"
-  },
-  {
-    "id": 3,
-    "name": "Dan Abramov",
-    "number": "12-43-234345"
-  },
-  {
-    "id": 4,
-    "name": "Mary Poppendieck",
-    "number": "39-23-6423122"
+
+morgan.token('post',function(req){
+  if(req.method=='POST'){
+    return JSON.stringify(req.body);
+  }else{
+    return ''
   }
-]
-//morgan.format('postFormat', ':method :url :status :res[content-length] - :response-time ms :post')
-
-app.use(morgan('tiny'));
-
-app.get('/', (req, res) => {
-  res.send('<h1>Welcome to the BUGSCODER server</h1>')
-})
-app.get('/api/people', (req, res) => {
-
-  res.json(people);
-
 })
 
+morgan.format('postFormat', ':method :url :status :res[content-length] - :response-time ms :post')
+app.use(morgan('postFormat'));
 
-app.post('/api/people', (req, res) => {
+
+app.get('/api/persons', (req, res)=>{
+    Person.find({}).then(persons=>{
+        res.json(persons);
+  })
+
+})
+
+
+app.post('/api/persons', (req, res,next) => {
   const body = req.body;
 
   if (!body.name || !body.number) {
     return res.status(400).json({
       error: "Name and number are required fields."
     });
+  }else{
+      let person=new Person({
+        name:body.name,
+        number:body.number
+      })
+     person.save().then(
+        savedPerson=>{return savedPerson.toJSON()}
+        
+      ).then(savedAndFormattedPerson=>res.json(savedAndFormattedPerson))
+      .catch(error=>next(error))
+
+    
   }
+  })
 
-  if (people.find(person => person.name === body.name)) {
-    return res.status(400).json({
-      error: "Name must be unique. This name already exists in the phonebook."
-    });
-  }
 
-  const newPerson = {
-    id: generateRandomId(),
-    name: body.name,
-    number: body.number
-  };
 
-  people = [...people, newPerson];
-  res.json(newPerson);
-});
-
-app.get('/api/people/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const person = people.find(person => person.id === id);
-  if (person) {
-    res.json(person);
-  } else {
-    res.status(404).end();
-  }
+app.get('/api/persons/:id', (req, res,next) => {
+  Person.findById(req.params.id)
+  .then(person=>{
+      if(person){
+        res.json(person)
+      }else{
+        res.status(404).end();
+      }
+    })
+  .catch(error=>next(error));
 
 })
 
-app.get('/info', (req, res) => {
+app.delete('/api/persons/:id', (req,res,next) => {
+	Person
+		.findByIdAndDelete(req.params.id)
+		.then(() => {
+			res.status(204).end()
+		})
+		.catch(error => next(error))
+})
+
+app.get('/info',async (req, res) => {
   let date = new Date();
-  //cont len=people.length();
-  res.send(`Phonebook has info for ${people.length} people <br><br> ${date}`)
+  let persons=await Person.find({})
+  res.send(`Phonebook has info for ${persons.length} people <br><br> ${date}`)
 })
 
+app.put('/api/persons/:id',(req,res,next)=>{
+  Person.findOneAndUpdate({_id:req.params.id},req.body,{
+    new:true,
+    runValidators:true
+  })
+  .then((result)=>{
+      res.json(result)
+    })
+  .catch(error=>next(error))
+})
+
+
+
+const unknownEndpoint=(req,res)=>{
+  res.status(404).send({error:'Unknown endpoint entered '})
+}
+app.use(unknownEndpoint);
+
+const errorHandler=(e,req,res,next)=>{
+  console.error(e);
+
+  if(e.name==='CastError'){
+    return res.status(400).send({error:'Malfomatted ID'})
+  }else if(e.name==='ValidationError'){
+    return res.status(404).send({error:e.message});
+  }
+  next(e);
+}
+app.use(errorHandler);
 
 
 
